@@ -168,8 +168,8 @@
 </div>
 
 <script>
-  // 保持与后端 Worker 一致，每片 5MB
-  const chunkSize = 5 * 1024 * 1024 
+  // 保持与后端 Worker 一致，每片 10MB
+  const chunkSize = 10 * 1024 * 1024 
   let token = sessionStorage.getItem('token')
 
   // 初始化检查本地是否存有 Token

@@ -41,7 +41,7 @@ export default {
       const { name, size, type } = await req.json();
       const fileId = crypto.randomUUID();
       
-      const chunkSize = 5 * 1024 * 1024;
+      const chunkSize = 10 * 1024 * 1024;
       const totalChunks = Math.ceil(size / chunkSize);
 
       const stub = env.FILE_SESSION.get(env.FILE_SESSION.idFromName(fileId));
