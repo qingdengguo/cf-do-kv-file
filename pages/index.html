@@ -14,122 +14,31 @@
       --muted: #6b7280;
       --border: #e5e7eb;
     }
-
     * { box-sizing: border-box; }
-
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
-                   Roboto, Helvetica, Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
       background: var(--bg);
       color: var(--text);
     }
-
-    .container {
-      max-width: 820px;
-      margin: 40px auto;
-      padding: 0 16px;
-    }
-
-    h1 {
-      font-size: 24px;
-      margin-bottom: 16px;
-    }
-
-    .card {
-      background: var(--card);
-      border-radius: 10px;
-      padding: 20px;
-      margin-bottom: 20px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.04);
-    }
-
-    label {
-      display: block;
-      font-size: 14px;
-      margin-bottom: 6px;
-      color: var(--muted);
-    }
-
-    input[type="text"],
-    input[type="file"] {
-      width: 100%;
-      padding: 10px 12px;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      font-size: 14px;
-    }
-
-    button {
-      margin-top: 12px;
-      padding: 10px 16px;
-      border-radius: 6px;
-      border: none;
-      background: var(--primary);
-      color: #fff;
-      font-size: 14px;
-      cursor: pointer;
-    }
-
-    button:disabled {
-      background: #a5b4fc;
-      cursor: not-allowed;
-    }
-
-    .status {
-      margin-top: 10px;
-      font-size: 14px;
-    }
-
+    .container { max-width: 820px; margin: 40px auto; padding: 0 16px; }
+    h1 { font-size: 24px; margin-bottom: 16px; }
+    .card { background: var(--card); border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.04); }
+    label { display: block; font-size: 14px; margin-bottom: 6px; color: var(--muted); }
+    input[type="text"], input[type="file"] { width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--border); font-size: 14px; }
+    button { margin-top: 12px; padding: 10px 16px; border-radius: 6px; border: none; background: var(--primary); color: #fff; font-size: 14px; cursor: pointer; }
+    button:disabled { background: #a5b4fc; cursor: not-allowed; }
+    .status { margin-top: 10px; font-size: 14px; }
     .success { color: #16a34a; }
     .error { color: var(--danger); }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 14px;
-    }
-
-    th, td {
-      padding: 10px;
-      border-bottom: 1px solid var(--border);
-      text-align: left;
-    }
-
-    th {
-      color: var(--muted);
-      font-weight: 500;
-    }
-
-    .actions button {
-      background: transparent;
-      color: var(--danger);
-      padding: 0;
-      margin: 0;
-    }
-
-    .progress {
-      height: 6px;
-      background: #e5e7eb;
-      border-radius: 3px;
-      overflow: hidden;
-      margin-top: 10px;
-    }
-
-    .progress div {
-      height: 100%;
-      background: var(--primary);
-      width: 0%;
-      transition: width .2s;
-    }
-    
-    a {
-      color: var(--primary);
-      text-decoration: none;
-    }
-    a:hover {
-      text-decoration: underline;
-    }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 10px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: var(--muted); font-weight: 500; }
+    .actions button { background: transparent; color: var(--danger); padding: 0; margin: 0; }
+    .progress { height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; margin-top: 10px; }
+    .progress div { height: 100%; background: var(--primary); width: 0%; transition: width .2s; }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -144,7 +53,7 @@
   </div>
 
   <div class="card" id="uploadCard" style="display:none">
-    <label>选择文件（分片上传，支持大文件）</label>
+    <label>选择文件（二进制流式切片，支持无上限大文件）</label>
     <input type="file" id="fileInput" />
     <button id="uploadBtn" onclick="upload()">上传文件</button>
     <div class="progress"><div id="progressBar"></div></div>
@@ -168,195 +77,130 @@
 </div>
 
 <script>
-  // 保持与后端 Worker 一致，每片 5MB
-  const chunkSize = 5 * 1024 * 1024 
-  let token = sessionStorage.getItem('token')
+  const chunkSize = 5 * 1024 * 1024; // 5MB 
+  let token = sessionStorage.getItem('token');
 
-  // 初始化检查本地是否存有 Token
   if (token) {
-    document.getElementById('tokenInput').value = token
-    unlock()
+    document.getElementById('tokenInput').value = token;
+    unlock();
   }
 
-  // 验证 Token 并在成功后解锁界面
   async function verifyToken() {
-    const tokenInput = document.getElementById('tokenInput')
-    const authStatus = document.getElementById('authStatus')
-    const t = tokenInput.value.trim()
-    
-    if (!t) {
-      authStatus.textContent = '请输入 Token'
-      authStatus.className = 'status error'
-      return
-    }
-
+    const t = document.getElementById('tokenInput').value.trim();
+    if (!t) return;
     try {
-      const res = await fetch('/files', {
-        headers: { Authorization: 'Bearer ' + t }
-      })
-
+      const res = await fetch('/files', { headers: { Authorization: 'Bearer ' + t } });
       if (res.ok) {
-        token = t
-        sessionStorage.setItem('token', token)
-        unlock()
-        authStatus.textContent = '鉴权成功'
-        authStatus.className = 'status success'
+        token = t;
+        sessionStorage.setItem('token', token);
+        unlock();
+        document.getElementById('authStatus').textContent = '验证成功';
+        document.getElementById('authStatus').className = 'status success';
       } else {
-        authStatus.textContent = 'Token 无效或权限不足 (' + res.status + ')'
-        authStatus.className = 'status error'
+        alert('Token 验证失败');
       }
-    } catch (err) {
-      authStatus.textContent = '连接服务器失败'
-      authStatus.className = 'status error'
-    }
+    } catch { alert('无法连接边缘服务器'); }
   }
 
-  // 解锁上传和列表卡片
   function unlock() {
-    document.getElementById('uploadCard').style.display = ''
-    document.getElementById('filesCard').style.display = ''
-    loadFiles()
+    document.getElementById('uploadCard').style.display = '';
+    document.getElementById('filesCard').style.display = '';
+    loadFiles();
   }
 
-  // 分片上传主函数
+  // 🌟 上传主函数：修改为了纯二进制流发送模式
   async function upload() {
-    const fileInput = document.getElementById('fileInput')
-    const uploadStatus = document.getElementById('uploadStatus')
-    const progressBar = document.getElementById('progressBar')
-    const uploadBtn = document.getElementById('uploadBtn')
+    const fileInput = document.getElementById('fileInput');
+    const uploadStatus = document.getElementById('uploadStatus');
+    const progressBar = document.getElementById('progressBar');
+    const uploadBtn = document.getElementById('uploadBtn');
     
-    const file = fileInput.files[0]
-    if (!file) {
-      uploadStatus.textContent = '请先选择文件'
-      uploadStatus.className = 'status error'
-      return
-    }
+    const file = fileInput.files[0];
+    if (!file) { alert('请先选择文件'); return; }
 
-    uploadBtn.disabled = true
-    uploadStatus.textContent = '正在初始化上传任务...'
-    uploadStatus.className = 'status'
-    progressBar.style.width = '0%'
+    uploadBtn.disabled = true;
+    progressBar.style.width = '0%';
+    uploadStatus.textContent = '正在初始化上传单单...';
 
     try {
-      // 1. 请求初始化分片任务 (对接 Worker，传递精确的 name, size, type)
+      // 1. 初始化分配 UploadId 
       const initRes = await fetch('/upload/init', {
         method: 'POST',
         headers: {
           Authorization: 'Bearer ' + token,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ 
-          name: file.name, 
-          size: file.size,
-          type: file.type || 'application/octet-stream'
-        })
-      })
+        body: JSON.stringify({ name: file.name, size: file.size, type: file.type || 'application/octet-stream' })
+      });
+      if (!initRes.ok) throw new Error('初始化任务失败');
+      const init = await initRes.json();
 
-      if (!initRes.ok) throw new Error('初始化上传失败')
-      const init = await initRes.json()
-
-      // 2. 循环切片并串行上传
+      // 2. 循环二进制切片直接投递
       for (let i = 0; i < init.chunks; i++) {
-        uploadStatus.textContent = `正在上传分片 (${i + 1}/${init.chunks})...`
+        uploadStatus.textContent = `发送分片 (${i + 1}/${init.chunks})...`;
+        const chunk = file.slice(i * chunkSize, (i + 1) * chunkSize);
         
-        const chunk = file.slice(i * chunkSize, (i + 1) * chunkSize)
-        
-        // 将凭证通过 URL Query 传递，避免后端反复解析复合多媒体数据包造成的内存膨胀
+        // 🌟 核心修改点：丢弃 FormData，直接在 Body 投递二进制 blob，并指明 Content-Type
         const chunkRes = await fetch(`/upload/chunk?uploadId=${init.uploadId}&index=${i}`, {
           method: 'POST',
           headers: {
-            Authorization: 'Bearer ' + token
-            // 注意：发送 FormData 时切勿手动设置 Content-Type 头，让浏览器自动追随 boundary
+            Authorization: 'Bearer ' + token,
+            'Content-Type': 'application/octet-stream' 
           },
-          body: (() => {
-            const f = new FormData()
-            f.append('chunk', chunk, file.name)
-            return f
-          })()
-        })
+          body: chunk 
+        });
 
-        if (!chunkRes.ok) throw new Error(`分片 ${i + 1} 上传失败`)
-
-        // 更新进度条
-        progressBar.style.width = `${((i + 1) / init.chunks) * 100}%`
+        if (!chunkRes.ok) throw new Error(`分片 ${i + 1} 传输故障`);
+        progressBar.style.width = `${((i + 1) / init.chunks) * 100}%`;
       }
 
-      // 3. 通知后端合拢分片并归档
-      uploadStatus.textContent = '正在完成文件归档...'
-      const completeRes = await fetch('/upload/complete', {
+      // 3. 收拢合并
+      uploadStatus.textContent = '拼合分片并封存...';
+      const compRes = await fetch('/upload/complete', {
         method: 'POST',
-        headers: {
-          Authorization: 'Bearer ' + token,
-          'Content-Type': 'application/json'
-        },
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
         body: JSON.stringify({ uploadId: init.uploadId })
-      })
+      });
+      if (!compRes.ok) throw new Error('封存归档故障');
 
-      if (!completeRes.ok) throw new Error('归档失败')
-
-      uploadStatus.textContent = '上传成功！'
-      uploadStatus.className = 'status success'
-      fileInput.value = '' // 清空选择器
-      loadFiles() // 刷新列表
+      uploadStatus.textContent = '文件成功落盘！';
+      uploadStatus.className = 'status success';
+      fileInput.value = '';
+      loadFiles();
 
     } catch (err) {
-      uploadStatus.textContent = '错误: ' + err.message
-      uploadStatus.className = 'status error'
-    } finally {
-      uploadBtn.disabled = false
-    }
+      uploadStatus.textContent = err.message;
+      uploadStatus.className = 'status error';
+    } finally { uploadBtn.disabled = false; }
   }
 
-  // 加载存储中的文件列表
   async function loadFiles() {
-    const fileList = document.getElementById('fileList')
+    const fileList = document.getElementById('fileList');
     try {
-      const res = await fetch('/files', {
-        headers: { Authorization: 'Bearer ' + token }
-      })
-      if (!res.ok) return
-
-      const data = await res.json()
-      fileList.innerHTML = ''
-
-      const entries = Object.entries(data)
+      const res = await fetch('/files', { headers: { Authorization: 'Bearer ' + token } });
+      const data = await res.json();
+      fileList.innerHTML = '';
+      const entries = Object.entries(data);
       if (entries.length === 0) {
-        fileList.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);">暂无文件</td></tr>'
-        return
+        fileList.innerHTML = '<tr><td colspan="4" style="text-align:center;">库中尚无文件</td></tr>';
+        return;
       }
-
       entries.forEach(([id, f]) => {
-        const tr = document.createElement('tr')
-        // 文件名修改为超链接，支持直接下载
+        const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td><a href="/download/${id}" target="_blank" rel="noopener noreferrer">📄 ${f.fileName || f.name}</a></td>
-          <td>${((f.size || 0) / 1024 / 1024).toFixed(2)} MB</td>
-          <td>${f.createdAt ? new Date(f.createdAt * 1000).toLocaleString() : '未知'}</td>
-          <td class="actions">
-            <button onclick="del('${id}')">删除</button>
-          </td>`
-        fileList.appendChild(tr)
-      })
-    } catch (err) {
-      fileList.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--danger);">加载列表失败</td></tr>'
-    }
+          <td><a href="/download/${id}" target="_blank">📄 ${f.fileName}</a></td>
+          <td>${(f.size / 1024 / 1024).toFixed(2)} MB</td>
+          <td>${new Date(f.createdAt * 1000).toLocaleString()}</td>
+          <td class="actions"><button onclick="del('${id}')">删除</button></td>`;
+        fileList.appendChild(tr);
+      });
+    } catch {}
   }
 
-  // 删除文件逻辑
   async function del(id) {
-    if (!confirm('确认要永久删除这个文件吗？')) return
-    try {
-      const res = await fetch('/delete/' + id, {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + token }
-      })
-      if (res.ok) {
-        loadFiles()
-      } else {
-        alert('删除失败')
-      }
-    } catch (err) {
-      alert('网络错误，删除失败')
+    if (confirm('确定彻底清除该文件？')) {
+      await fetch('/delete/' + id, { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+      loadFiles();
     }
   }
 </script>

@@ -7,45 +7,49 @@ export class FileSession {
   async fetch(req) {
     const url = new URL(req.url);
 
+    // 初始化任务状态
     if (url.pathname === "/init") {
       const meta = await req.json();
       await this.state.storage.put("meta", meta);
       return new Response("OK");
     }
 
+    // 处理二进制分片（核心修改部分）
     if (url.pathname === "/chunk") {
       const index = url.searchParams.get("index");
       const meta = await this.state.storage.get("meta");
+      if (!meta) return new Response("Session Not Found", { status: 404 });
       
-      // 解析前端传过来的 FormData
-      const formData = await req.formData();
-      const chunkFile = formData.get("chunk"); 
-      if (!chunkFile) return new Response("No chunk file found", { status: 400 });
+      // 🌟 核心改进：前端发来的是纯二进制流，直接转为 ArrayBuffer
+      const buf = await req.arrayBuffer(); 
       
-      const buf = await chunkFile.arrayBuffer();
-      // 存储键名加入 fileId 防止多用户文件名冲突
+      // 以 "file:唯一ID:分片序号" 命名，杜绝同名文件覆盖 Bug
       const key = `file:${meta.fileId}:${index}`;
       await this.env.FILE_KV.put(key, buf);
       return new Response("OK");
     }
 
+    // 完成上传并归档
     if (url.pathname === "/complete") {
       const meta = await this.state.storage.get("meta");
+      if (!meta) return new Response("Session Not Found", { status: 404 });
+      
       meta.createdAt = Math.floor(Date.now() / 1000);
       await this.state.storage.put("meta", meta);
       await this.state.storage.put("completed", true);
       
-      // 把最新的元数据返回给 Worker 建立全局索引
       return Response.json(meta);
     }
 
+    // 拼接分片并提供下载
     if (url.pathname === "/download") {
       const meta = await this.state.storage.get("meta");
       const completed = await this.state.storage.get("completed");
-      if (!completed || !meta) return new Response("File not ready or found", { status: 404 });
+      if (!completed || !meta) return new Response("File Not Ready", { status: 404 });
 
-      // 使用流式响应（Streams）拼接 KV 分片
       const env = this.env;
+      
+      // 使用边缘流（ReadableStream）按顺序把 KV 里的分片拼接吐出
       const stream = new ReadableStream({
         async start(controller) {
           for (let i = 0; i < meta.totalChunks; i++) {
@@ -62,21 +66,23 @@ export class FileSession {
       return new Response(stream, {
         headers: {
           "Content-Type": meta.type || "application/octet-stream",
+          // 对文件名进行编码防止中文乱码，触发流式附件下载
           "Content-Disposition": `attachment; filename="${encodeURIComponent(meta.fileName)}"`,
           "Content-Length": meta.size
         }
       });
     }
 
+    // 删除并清理
     if (url.pathname === "/delete") {
       const meta = await this.state.storage.get("meta");
       if (meta) {
-        // 清理 KV 中的所有分片
+        // 循环擦除该文件在 KV 中占用的每一块内存分片
         for (let i = 0; i < meta.totalChunks; i++) {
           await this.env.FILE_KV.delete(`file:${meta.fileId}:${i}`);
         }
       }
-      await this.state.storage.deleteAll(); // 清空 DO 自身状态
+      await this.state.storage.deleteAll(); // 清空该 DO 自身的数据
       return new Response("Deleted");
     }
 
