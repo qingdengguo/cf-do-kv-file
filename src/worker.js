@@ -39,9 +39,9 @@ export default {
     // 3. 初始化上传
     if (req.method === "POST" && url.pathname === "/upload/init") {
       const { name, size, type } = await req.json();
-      const fileId = crypto.randomUUID();
+      const fileId = name;
       
-      const chunkSize = 10 * 1024 * 1024;
+      const chunkSize =  * 1024 * 1024;
       const totalChunks = Math.ceil(size / chunkSize);
 
       const stub = env.FILE_SESSION.get(env.FILE_SESSION.idFromName(fileId));
@@ -82,17 +82,17 @@ export default {
     }
 
     // 6. 下载文件
-    if (req.method === "GET" && url.pathname.startsWith("/download/")) {
-		// 提取出 URL 里的文件名，并进行解码（防止中文变成 %E4%BD%A0）
-		const encodedName = url.pathname.split("/").pop();
-		const fileName = decodeURIComponent(encodedName); 
+	if (req.method === "GET" && url.pathname.startsWith("/download/")) {
+	  // 提取出 URL 里的文件名，并进行解码（防止中文变成 %E4%BD%A0）
+	  const encodedName = url.pathname.split("/").pop();
+	  const fileName = decodeURIComponent(encodedName); 
 
-		if (!fileName) return new Response("Missing filename", { status: 400 });
+	  if (!fileName) return new Response("Missing filename", { status: 400 });
 
-		// 🌟 核心修改：直接用【文件名】去获取或激活对应的 Durable Object 实例
-		const stub = env.FILE_SESSION.get(env.FILE_SESSION.idFromName(fileName));
-		return stub.fetch("https://do/download");
-    }
+	  // 🌟 核心修改：直接用【文件名】去获取或激活对应的 Durable Object 实例
+	  const stub = env.FILE_SESSION.get(env.FILE_SESSION.idFromName(fileName));
+	  return stub.fetch("https://do/download");
+	}
 
     // 7. 删除文件
     if (req.method === "POST" && url.pathname.startsWith("/delete/")) {
