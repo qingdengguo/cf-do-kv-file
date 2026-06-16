@@ -7,13 +7,6 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url);
 
-    // 1. 简单的 Token 鉴权中间件 (下载接口除外)
-    if (url.pathname !== "/" && !url.pathname.startsWith("/download/") && !url.pathname.startsWith("/pages/index")) {
-      const auth = req.headers.get("Authorization");
-      if (!auth || auth !== `Bearer ${AUTH_TOKEN}`) {
-        return new Response("Unauthorized，Please Authorized", { status: 401 });
-      }
-    }
 
     // 2. 模拟获取文件列表 (实际可以从 KV 的前缀列出，这里从文件索引 KV 读取)
     if (req.method === "GET" && url.pathname === "/files") {
