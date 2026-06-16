@@ -105,6 +105,7 @@
       background: transparent;
       color: var(--danger);
       padding: 0;
+      margin: 0;
     }
 
     .progress {
@@ -121,39 +122,44 @@
       width: 0%;
       transition: width .2s;
     }
+    
+    a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
 <div class="container">
-  <h1>📁 文件管理</h1>
+  <h1>📁 Cloudflare 边缘文件管理</h1>
 
-  <!-- Token -->
   <div class="card">
     <label>访问 Token</label>
     <input id="tokenInput" type="text" placeholder="请输入 Token" />
-    <button onclick="verifyToken()">验证 Token</button>
+    <button id="verifyBtn" onclick="verifyToken()">验证 Token</button>
     <div id="authStatus" class="status"></div>
   </div>
 
-  <!-- Upload -->
   <div class="card" id="uploadCard" style="display:none">
-    <label>选择文件（≤100MB）</label>
+    <label>选择文件（分片上传，支持大文件）</label>
     <input type="file" id="fileInput" />
-    <button onclick="upload()">上传文件</button>
+    <button id="uploadBtn" onclick="upload()">上传文件</button>
     <div class="progress"><div id="progressBar"></div></div>
     <div id="uploadStatus" class="status"></div>
   </div>
 
-  <!-- Files -->
   <div class="card" id="filesCard" style="display:none">
-    <h3>文件列表</h3>
+    <h3>文件列表 (点击文件名即可下载)</h3>
     <table>
       <thead>
         <tr>
           <th>文件名</th>
           <th>大小</th>
-          <th>时间</th>
-          <th></th>
+          <th>上传时间</th>
+          <th>操作</th>
         </tr>
       </thead>
       <tbody id="fileList"></tbody>
@@ -162,109 +168,196 @@
 </div>
 
 <script>
-  const chunkSize = 5 * 1024 * 1024
+  // 保持与后端 Worker 一致，每片 5MB
+  const chunkSize = 5 * 1024 * 1024 
   let token = sessionStorage.getItem('token')
 
-  if (token) unlock()
+  // 初始化检查本地是否存有 Token
+  if (token) {
+    document.getElementById('tokenInput').value = token
+    unlock()
+  }
 
+  // 验证 Token 并在成功后解锁界面
   async function verifyToken() {
+    const tokenInput = document.getElementById('tokenInput')
+    const authStatus = document.getElementById('authStatus')
     const t = tokenInput.value.trim()
-    if (!t) return
+    
+    if (!t) {
+      authStatus.textContent = '请输入 Token'
+      authStatus.className = 'status error'
+      return
+    }
 
-    const res = await fetch('/files', {
-      headers: { Authorization: 'Bearer ' + t }
-    })
+    try {
+      const res = await fetch('/files', {
+        headers: { Authorization: 'Bearer ' + t }
+      })
 
-    if (res.ok) {
-      token = t
-      sessionStorage.setItem('token', token)
-      unlock()
-      authStatus.textContent = '鉴权成功'
-      authStatus.className = 'status success'
-    } else {
-      authStatus.textContent = 'Token 无效'
+      if (res.ok) {
+        token = t
+        sessionStorage.setItem('token', token)
+        unlock()
+        authStatus.textContent = '鉴权成功'
+        authStatus.className = 'status success'
+      } else {
+        authStatus.textContent = 'Token 无效或权限不足 (' + res.status + ')'
+        authStatus.className = 'status error'
+      }
+    } catch (err) {
+      authStatus.textContent = '连接服务器失败'
       authStatus.className = 'status error'
     }
   }
 
+  // 解锁上传和列表卡片
   function unlock() {
-    uploadCard.style.display = ''
-    filesCard.style.display = ''
+    document.getElementById('uploadCard').style.display = ''
+    document.getElementById('filesCard').style.display = ''
     loadFiles()
   }
 
+  // 分片上传主函数
   async function upload() {
+    const fileInput = document.getElementById('fileInput')
+    const uploadStatus = document.getElementById('uploadStatus')
+    const progressBar = document.getElementById('progressBar')
+    const uploadBtn = document.getElementById('uploadBtn')
+    
     const file = fileInput.files[0]
-    if (!file) return
-
-    const init = await fetch('/upload/init', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + token,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ name: file.name, size: file.size })
-    }).then(r => r.json())
-
-    for (let i = 0; i < init.chunks; i++) {
-      const chunk = file.slice(i * chunkSize, (i + 1) * chunkSize)
-      await fetch('/upload/chunk', {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer ' + token
-        },
-        body: (() => {
-          const f = new FormData()
-          f.append('uploadId', init.uploadId)
-          f.append('index', i)
-          f.append('chunk', chunk)
-          return f
-        })()
-      })
-      progressBar.style.width = `${((i + 1) / init.chunks) * 100}%`
+    if (!file) {
+      uploadStatus.textContent = '请先选择文件'
+      uploadStatus.className = 'status error'
+      return
     }
 
-    await fetch('/upload/complete', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + token,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ uploadId: init.uploadId })
-    })
+    uploadBtn.disabled = true
+    uploadStatus.textContent = '正在初始化上传任务...'
+    uploadStatus.className = 'status'
+    progressBar.style.width = '0%'
 
-    uploadStatus.textContent = '上传完成'
-    uploadStatus.className = 'status success'
-    loadFiles()
+    try {
+      // 1. 请求初始化分片任务 (对接 Worker，传递精确的 name, size, type)
+      const initRes = await fetch('/upload/init', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer ' + token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          name: file.name, 
+          size: file.size,
+          type: file.type || 'application/octet-stream'
+        })
+      })
+
+      if (!initRes.ok) throw new Error('初始化上传失败')
+      const init = await initRes.json()
+
+      // 2. 循环切片并串行上传
+      for (let i = 0; i < init.chunks; i++) {
+        uploadStatus.textContent = `正在上传分片 (${i + 1}/${init.chunks})...`
+        
+        const chunk = file.slice(i * chunkSize, (i + 1) * chunkSize)
+        
+        // 将凭证通过 URL Query 传递，避免后端反复解析复合多媒体数据包造成的内存膨胀
+        const chunkRes = await fetch(`/upload/chunk?uploadId=${init.uploadId}&index=${i}`, {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer ' + token
+            // 注意：发送 FormData 时切勿手动设置 Content-Type 头，让浏览器自动追随 boundary
+          },
+          body: (() => {
+            const f = new FormData()
+            f.append('chunk', chunk, file.name)
+            return f
+          })()
+        })
+
+        if (!chunkRes.ok) throw new Error(`分片 ${i + 1} 上传失败`)
+
+        // 更新进度条
+        progressBar.style.width = `${((i + 1) / init.chunks) * 100}%`
+      }
+
+      // 3. 通知后端合拢分片并归档
+      uploadStatus.textContent = '正在完成文件归档...'
+      const completeRes = await fetch('/upload/complete', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer ' + token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ uploadId: init.uploadId })
+      })
+
+      if (!completeRes.ok) throw new Error('归档失败')
+
+      uploadStatus.textContent = '上传成功！'
+      uploadStatus.className = 'status success'
+      fileInput.value = '' // 清空选择器
+      loadFiles() // 刷新列表
+
+    } catch (err) {
+      uploadStatus.textContent = '错误: ' + err.message
+      uploadStatus.className = 'status error'
+    } finally {
+      uploadBtn.disabled = false
+    }
   }
 
+  // 加载存储中的文件列表
   async function loadFiles() {
-    const res = await fetch('/files', {
-      headers: { Authorization: 'Bearer ' + token }
-    })
-    const data = await res.json()
-    fileList.innerHTML = ''
+    const fileList = document.getElementById('fileList')
+    try {
+      const res = await fetch('/files', {
+        headers: { Authorization: 'Bearer ' + token }
+      })
+      if (!res.ok) return
 
-    Object.entries(data).forEach(([id, f]) => {
-      const tr = document.createElement('tr')
-      tr.innerHTML = `
-        <td>${f.name}</td>
-        <td>${(f.size / 1024 / 1024).toFixed(2)} MB</td>
-        <td>${new Date(f.createdAt * 1000).toLocaleString()}</td>
-        <td class="actions">
-          <button onclick="del('${id}')">删除</button>
-        </td>`
-      fileList.appendChild(tr)
-    })
+      const data = await res.json()
+      fileList.innerHTML = ''
+
+      const entries = Object.entries(data)
+      if (entries.length === 0) {
+        fileList.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);">暂无文件</td></tr>'
+        return
+      }
+
+      entries.forEach(([id, f]) => {
+        const tr = document.createElement('tr')
+        // 文件名修改为超链接，支持直接下载
+        tr.innerHTML = `
+          <td><a href="/download/${id}" target="_blank" rel="noopener noreferrer">📄 ${f.fileName || f.name}</a></td>
+          <td>${((f.size || 0) / 1024 / 1024).toFixed(2)} MB</td>
+          <td>${f.createdAt ? new Date(f.createdAt * 1000).toLocaleString() : '未知'}</td>
+          <td class="actions">
+            <button onclick="del('${id}')">删除</button>
+          </td>`
+        fileList.appendChild(tr)
+      })
+    } catch (err) {
+      fileList.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--danger);">加载列表失败</td></tr>'
+    }
   }
 
+  // 删除文件逻辑
   async function del(id) {
-    if (!confirm('确认删除？')) return
-    await fetch('/delete/' + id, {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + token }
-    })
-    loadFiles()
+    if (!confirm('确认要永久删除这个文件吗？')) return
+    try {
+      const res = await fetch('/delete/' + id, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token }
+      })
+      if (res.ok) {
+        loadFiles()
+      } else {
+        alert('删除失败')
+      }
+    } catch (err) {
+      alert('网络错误，删除失败')
+    }
   }
 </script>
 </body>

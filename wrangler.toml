@@ -2,8 +2,9 @@ name = "do-kv-file"
 main = "src/worker.js"
 compatibility_date = "2025-03-01"
 
+# 将 binding 修正为 FILE_KV
 kv_namespaces = [
-  { binding = "big_file", id = "e3500720dd7c481dbc7fc808ade91eb6" }
+  { binding = "FILE_KV", id = "e3500720dd7c481dbc7fc808ade91eb6" }
 ]
 
 durable_objects.bindings = [
