@@ -1,4 +1,4 @@
-name = "do-kv-file"
+name = "cf-do-kv-file"
 main = "src/worker.js"
 compatibility_date = "2025-03-01"
 
