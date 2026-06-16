@@ -322,14 +322,12 @@
       entries.forEach(([id, f]) => {
         const tr = document.createElement('tr')
         // 文件名修改为超链接，支持直接下载
-        tr.innerHTML = `
-          <td><a href="/download/${id}" target="_blank" rel="noopener noreferrer">📄 ${f.fileName || f.name}</a></td>
-          <td>${((f.size || 0) / 1024 / 1024).toFixed(2)} MB</td>
-          <td>${f.createdAt ? new Date(f.createdAt * 1000).toLocaleString() : '未知'}</td>
-          <td class="actions">
-            <button onclick="del('${id}')">删除</button>
-          </td>`
-        fileList.appendChild(tr)
+		tr.innerHTML = `
+			<td><a href="/download/${encodeURIComponent(f.fileName)}" target="_blank">📄 ${f.fileName}</a></td>
+			<td>${(f.size / 1024 / 1024).toFixed(2)} MB</td>
+			<td>${new Date(f.createdAt * 1000).toLocaleString()}</td>
+			<td class="actions"><button onclick="del('${id}')">删除</button></td>`;
+		fileList.appendChild(tr);
       })
     } catch (err) {
       fileList.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--danger);">加载列表失败</td></tr>'

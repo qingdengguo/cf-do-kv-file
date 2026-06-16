@@ -83,9 +83,15 @@ export default {
 
     // 6. 下载文件
     if (req.method === "GET" && url.pathname.startsWith("/download/")) {
-      const fileId = url.pathname.split("/").pop();
-      const stub = env.FILE_SESSION.get(env.FILE_SESSION.idFromName(fileId));
-      return stub.fetch("https://do/download");
+		// 提取出 URL 里的文件名，并进行解码（防止中文变成 %E4%BD%A0）
+		const encodedName = url.pathname.split("/").pop();
+		const fileName = decodeURIComponent(encodedName); 
+
+		if (!fileName) return new Response("Missing filename", { status: 400 });
+
+		// 🌟 核心修改：直接用【文件名】去获取或激活对应的 Durable Object 实例
+		const stub = env.FILE_SESSION.get(env.FILE_SESSION.idFromName(fileName));
+		return stub.fetch("https://do/download");
     }
 
     // 7. 删除文件
