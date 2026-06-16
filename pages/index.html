@@ -256,30 +256,24 @@
       const init = await initRes.json()
 
       // 2. 循环切片并串行上传
-      for (let i = 0; i < init.chunks; i++) {
-        uploadStatus.textContent = `正在上传分片 (${i + 1}/${init.chunks})...`
-        
-        const chunk = file.slice(i * chunkSize, (i + 1) * chunkSize)
-        
-        // 将凭证通过 URL Query 传递，避免后端反复解析复合多媒体数据包造成的内存膨胀
-        const chunkRes = await fetch(`/upload/chunk?uploadId=${init.uploadId}&index=${i}`, {
-          method: 'POST',
-          headers: {
-            Authorization: 'Bearer ' + token
-            // 注意：发送 FormData 时切勿手动设置 Content-Type 头，让浏览器自动追随 boundary
-          },
-          body: (() => {
-            const f = new FormData()
-            f.append('chunk', chunk, file.name)
-            return f
-          })()
-        })
+      // 找到 index.html 里的循环，改成直接发送 chunk (Blob)
+		for (let i = 0; i < init.chunks; i++) {
+		  uploadStatus.textContent = `正在上传分片 (${i + 1}/${init.chunks})...`
+		  
+		  const chunk = file.slice(i * chunkSize, (i + 1) * chunkSize)
+		  
+		  const chunkRes = await fetch(`/upload/chunk?uploadId=${init.uploadId}&index=${i}`, {
+			method: 'POST',
+			headers: {
+			  Authorization: 'Bearer ' + token,
+			  'Content-Type': 'application/octet-stream' // 明确告诉后端这是纯二进制
+			},
+			body: chunk // 🌟 直接传 Blob，不套入 FormData！
+		  })
 
-        if (!chunkRes.ok) throw new Error(`分片 ${i + 1} 上传失败`)
-
-        // 更新进度条
-        progressBar.style.width = `${((i + 1) / init.chunks) * 100}%`
-      }
+		  if (!chunkRes.ok) throw new Error(`分片 ${i + 1} 上传失败`)
+		  progressBar.style.width = `${((i + 1) / init.chunks) * 100}%`
+		}
 
       // 3. 通知后端合拢分片并归档
       uploadStatus.textContent = '正在完成文件归档...'

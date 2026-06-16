@@ -13,21 +13,17 @@ export class FileSession {
       return new Response("OK");
     }
 
-    if (url.pathname === "/chunk") {
-      const index = url.searchParams.get("index");
-      const meta = await this.state.storage.get("meta");
-      
-      // 解析前端传过来的 FormData
-      const formData = await req.formData();
-      const chunkFile = formData.get("chunk"); 
-      if (!chunkFile) return new Response("No chunk file found", { status: 400 });
-      
-      const buf = await chunkFile.arrayBuffer();
-      // 存储键名加入 fileId 防止多用户文件名冲突
-      const key = `file:${meta.fileId}:${index}`;
-      await this.env.FILE_KV.put(key, buf);
-      return new Response("OK");
-    }
+	if (url.pathname === "/chunk") {
+	  const index = url.searchParams.get("index");
+	  const meta = await this.state.storage.get("meta");
+	  
+	  // 🌟 因为前端直接传的二进制，所以这里直接拿 arrayBuffer，拿到的就是最纯净的文件碎片！
+	  const buf = await req.arrayBuffer(); 
+	  
+	  const key = `file:${meta.fileId}:${index}`;
+	  await this.env.FILE_KV.put(key, buf);
+	  return new Response("OK");
+	}
 
     if (url.pathname === "/complete") {
       const meta = await this.state.storage.get("meta");
