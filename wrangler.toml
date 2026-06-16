@@ -2,7 +2,6 @@ name = "do-kv-file"
 main = "src/worker.js"
 compatibility_date = "2025-03-01"
 
-# 将 binding 修正为 FILE_KV
 kv_namespaces = [
   { binding = "FILE_KV", id = "e3500720dd7c481dbc7fc808ade91eb6" }
 ]
@@ -13,4 +12,5 @@ durable_objects.bindings = [
 
 [[migrations]]
 tag = "v1"
-new_classes = ["FileSession"]
+# 将原来的 new_classes 改为 new_sqlite_classes
+new_sqlite_classes = ["FileSession"]
