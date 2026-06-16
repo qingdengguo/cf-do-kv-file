@@ -1,0 +1,15 @@
+name = "do-kv-file"
+main = "src/worker.js"
+compatibility_date = "2025-03-01"
+
+kv_namespaces = [
+  { binding = "big_file", id = "e3500720dd7c481dbc7fc808ade91eb6" }
+]
+
+durable_objects.bindings = [
+  { name = "FILE_SESSION", class_name = "FileSession" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["FileSession"]
