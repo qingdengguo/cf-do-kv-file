@@ -1,7 +1,7 @@
 import { FileSession } from "./fileSession"
 export { FileSession }
 
-const AUTH_TOKEN = "SECRET_TOKEN_123"; // 全局访问凭证（可根据需要修改）
+const AUTH_TOKEN = "okzxc123"; // 全局访问凭证（可根据需要修改）
 
 export default {
   async fetch(req, env) {
