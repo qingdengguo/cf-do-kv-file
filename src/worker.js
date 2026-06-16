@@ -1,14 +1,39 @@
 import { FileSession } from "./fileSession"
 export { FileSession }
 
-const AUTH_TOKEN = "okqazzxc123"; // 示例 Token
+const AUTH_TOKEN = "okzxc123"; // 你的 Token
+
+// HTML 网页源码，直接嵌入到 Worker 中（最适合独立 Worker 部署的方案）
+const HTML_CONTENT = `
+<!DOCTYPE html>
+`;
 
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
 
+    // 【新增逻辑】如果访问根路径、/index.html 或者你原本测试的路径，直接返回网页
+    if (url.pathname === "/" || url.pathname === "/index.html" || url.pathname === "/pages/index.html") {
+      return new Response(HTML_CONTENT, {
+        headers: { "Content-Type": "text/html; charset=UTF-8" }
+      });
+    }
 
-    // 2. 模拟获取文件列表 (实际可以从 KV 的前缀列出，这里从文件索引 KV 读取)
+    // 1. 简单的 Token 鉴权中间件 (下载接口和首页除外)
+    // 修复了之前的 || 逻辑 Bug，改为精确拦截 API 请求
+    if (
+      url.pathname !== "/" && 
+      url.pathname !== "/index.html" && 
+      url.pathname !== "/pages/index.html" && 
+      !url.pathname.startsWith("/download/")
+    ) {
+      const auth = req.headers.get("Authorization");
+      if (!auth || auth !== `Bearer ${AUTH_TOKEN}`) {
+        return new Response("Unauthorized", { status: 401 });
+      }
+    }
+
+    // 2. 模拟获取文件列表
     if (req.method === "GET" && url.pathname === "/files") {
       const list = await env.FILE_KV.get("INDEX_FILES") || "{}";
       return new Response(list, { headers: { "Content-Type": "application/json" } });
@@ -19,7 +44,6 @@ export default {
       const { name, size, type } = await req.json();
       const fileId = crypto.randomUUID();
       
-      // 这里的 chunkSize 必须和前端的 5MB 一致
       const chunkSize = 5 * 1024 * 1024;
       const totalChunks = Math.ceil(size / chunkSize);
 
@@ -30,11 +54,10 @@ export default {
         body: JSON.stringify({ fileName: name, totalChunks, type, size, fileId })
       });
 
-      // 返回前端需要的字段
       return Response.json({ uploadId: fileId, chunks: totalChunks });
     }
 
-    // 4. 上传分片 (改用 URL Query 传参，避免 Worker 解析 FormData 的性能损耗)
+    // 4. 上传分片
     if (req.method === "POST" && url.pathname === "/upload/chunk") {
       const uploadId = url.searchParams.get("uploadId");
       const index = url.searchParams.get("index");
@@ -42,7 +65,6 @@ export default {
       if (!uploadId || index === null) return new Response("Missing params", { status: 400 });
 
       const stub = env.FILE_SESSION.get(env.FILE_SESSION.idFromName(uploadId));
-      // 直接把含有二进制文件的请求发给 DO
       return stub.fetch(`https://do/chunk?index=${index}`, req);
     }
 
@@ -54,7 +76,6 @@ export default {
       const res = await stub.fetch("https://do/complete", { method: "POST" });
       if (!res.ok) return res;
 
-      // 将成功的文件元数据写入全局列表索引
       const meta = await res.json();
       const list = JSON.parse(await env.FILE_KV.get("INDEX_FILES") || "{}");
       list[uploadId] = meta;
@@ -77,7 +98,7 @@ export default {
       
       if (list[fileId]) {
         const stub = env.FILE_SESSION.get(env.FILE_SESSION.idFromName(fileId));
-        await stub.fetch("https://do/delete", { method: "POST" }); // 通知 DO 释放空间
+        await stub.fetch("https://do/delete", { method: "POST" });
         delete list[fileId];
         await env.FILE_KV.put("INDEX_FILES", JSON.stringify(list));
       }
