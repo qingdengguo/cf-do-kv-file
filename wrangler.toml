@@ -1,22 +1,16 @@
-name = "do-kv-file"
+name = "cf-do-kv-file"
 main = "src/worker.js"
 compatibility_date = "2025-03-01"
 
-# 自动托管 pages 目录下的静态 index.html 页面
-[assets]
-directory = "./pages"
-
-# KV 命名空间绑定（保持 FILE_KV 别名在代码里统一）
 kv_namespaces = [
   { binding = "FILE_KV", id = "e3500720dd7c481dbc7fc808ade91eb6" }
 ]
 
-# Durable Objects 绑定
 durable_objects.bindings = [
   { name = "FILE_SESSION", class_name = "FileSession" }
 ]
 
-# 免费账户专属 SQLite DO 迁移语法
 [[migrations]]
 tag = "v1"
+# 将原来的 new_classes 改为 new_sqlite_classes
 new_sqlite_classes = ["FileSession"]
