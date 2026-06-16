@@ -41,7 +41,7 @@ export default {
       const { name, size, type } = await req.json();
       const fileId = name;
       
-      const chunkSize =  * 1024 * 1024;
+      const chunkSize = 10 * 1024 * 1024;
       const totalChunks = Math.ceil(size / chunkSize);
 
       const stub = env.FILE_SESSION.get(env.FILE_SESSION.idFromName(fileId));
@@ -81,7 +81,7 @@ export default {
       return Response.json({ success: true });
     }
 
-    // 6. 下载文件
+	// 6. 下载文件 (通过文件名指定固定的 DO 实例)
 	if (req.method === "GET" && url.pathname.startsWith("/download/")) {
 	  // 提取出 URL 里的文件名，并进行解码（防止中文变成 %E4%BD%A0）
 	  const encodedName = url.pathname.split("/").pop();
