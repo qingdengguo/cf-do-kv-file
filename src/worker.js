@@ -8,7 +8,7 @@ export default {
     const url = new URL(req.url);
 
     // 1. 简单的 Token 鉴权中间件 (下载接口除外)
-    if (url.pathname !== "/" && (!url.pathname.startsWith("/download/") || !url.pathname.endsWith("/pages/index"))) {
+    if (url.pathname !== "/" && !url.pathname.startsWith("/download/") && !url.pathname.endsWith("/pages/index")) {
       const auth = req.headers.get("Authorization");
       if (!auth || auth !== `Bearer ${AUTH_TOKEN}`) {
         return new Response("Unauthorized", { status: 401 });
